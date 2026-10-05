@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Auth</title>
+    <style>
+        * { box-sizing: border-box; font-family: Arial, sans-serif; }
+        body { background: #0f172a; color: #fff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
+        .card { background: #1e293b; padding: 30px; border-radius: 12px; width: 100%; max-width: 450px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        h1, h2 { color: #38bdf8; margin-bottom: 20px; }
+        .input-group { margin-bottom: 15px; text-align: left; }
+        label { display: block; font-size: 14px; color: #94a3b8; margin-bottom: 5px; }
+        input { width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff; font-size: 15px; }
+        button { width: 100%; padding: 12px; background: #10b981; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 10px; }
+        button:hover { background: #059669; }
+        .hidden { display: none; }
+        .error { color: #f87171; font-size: 14px; margin-top: 10px; }
+        .request-box { background: #334155; padding: 15px; border-radius: 8px; margin-top: 15px; text-align: left; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <!-- MÀN HÌNH 1: ĐĂNG NHẬP ADMIN -->
+    <div id="admin-login-section">
+        <h2>Đăng Nhập Admin</h2>
+        
+        <div class="input-group">
+            <label>Mật khẩu Admin:</label>
+            <input type="password" id="admin-pass" placeholder="Nhập mật khẩu admin...">
+        </div>
+
+        <div class="input-group">
+            <label>Câu hỏi xác minh: <strong>Tôi là ai?</strong></label>
+            <input type="text" id="admin-security-ans" placeholder="Nhập câu trả lời...">
+        </div>
+
+        <p id="admin-error" class="error hidden">Thông tin xác thực Admin không đúng!</p>
+        <button onclick="loginAdmin()">Vào Dashboard</button>
+    </div>
+
+    <!-- MÀN HÌNH 2: DASHBOARD QUẢN LÝ (Chỉ hiện khi đăng nhập đúng) -->
+    <div id="admin-dashboard-section" class="hidden">
+        <h1>Admin Panel</h1>
+        <div id="request-area">
+            <p style="color: #94a3b8;">Đang kết nối Server...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Điền URL Cloudflare Worker của bạn vào đây
+    const WORKER_URL = "https://qwet-auth-worker.yourname.workers.dev";
+    
+    // Thông tin xác thực Admin
+    const ADMIN_PASS = "1jifo983u@289hr";
+    const SECURITY_ANSWER = "S24fe";
+
+    function loginAdmin() {
+        const passInput = document.getElementById('admin-pass').value;
+        const ansInput = document.getElementById('admin-security-ans').value;
+        const errorMsg = document.getElementById('admin-error');
+
+        // Kiểm tra đúng cả Mật khẩu và Câu trả lời bí mật
+        if (passInput === ADMIN_PASS && ansInput === SECURITY_ANSWER) {
+            errorMsg.classList.add('hidden');
+            
+            // Ẩn màn hình đăng nhập, hiện Dashboard
+            document.getElementById('admin-login-section').classList.add('hidden');
+            document.getElementById('admin-dashboard-section').classList.remove('hidden');
+
+            // Bắt đầu lắng nghe yêu cầu cấp mã realtime mỗi 2 giây
+            pollRequest();
+            setInterval(pollRequest, 2000);
+        } else {
+            errorMsg.classList.remove('hidden');
+        }
+    }
+
+    async function pollRequest() {
+        try {
+            const res = await fetch(`${WORKER_URL}/api/status`);
+            const data = await res.json();
+            const area = document.getElementById('request-area');
+
+            if (data.status === "waiting") {
+                area.innerHTML = `
+                    <div class="request-box">
+                        <p style="color: #f59e0b; font-weight: bold;">Có người dùng đang chờ cấp mã!</p>
+                        <p style="font-size: 12px; color: #cbd5e1;">ID: ${data.id}</p>
+                        <input type="text" id="code-input" placeholder="Nhập mã code gửi User..." style="margin-top: 10px;">
+                        <button onclick="sendCode()" style="margin-top: 10px;">Gửi Mã Xóa/Duyệt</button>
+                    </div>
+                `;
+            } else if (data.status === "approved") {
+                area.innerHTML = `
+                    <div class="request-box" style="border-left: 4px solid #10b981;">
+                        <p style="color: #10b981; font-weight: bold;">Đã cấp mã thành công!</p>
+                        <p>Mã hiện tại: <strong>${data.code}</strong></p>
+                    </div>
+                `;
+            } else {
+                area.innerHTML = `<p style="color: #94a3b8; font-style: italic;">Chưa có người dùng nào gửi yêu cầu...</p>`;
+            }
+        } catch (err) {
+            console.error("Lỗi kết nối:", err);
+        }
+    }
+
+    async function sendCode() {
+        const code = document.getElementById('code-input').value;
+        if (!code) return alert("Vui lòng nhập mã trước khi gửi!");
+
+        try {
+            await fetch(`${WORKER_URL}/api/approve`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code })
+            });
+
+            alert("Đã gửi mã thành công cho User!");
+            pollRequest();
+        } catch (err) {
+            alert("Lỗi khi gửi mã!");
+        }
+    }
+</script>
+
+</body>
+</html>
