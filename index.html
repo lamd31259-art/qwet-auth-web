@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xác thực người dùng</title>
+    <style>
+        * { box-sizing: border-box; font-family: Arial, sans-serif; }
+        body { background: #0f172a; color: #fff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .card { background: #1e293b; padding: 30px; border-radius: 12px; width: 100%; max-width: 400px; text-align: center; }
+        input { width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff; margin-bottom: 15px; text-align: center; font-size: 16px; }
+        button { width: 100%; padding: 12px; border: none; border-radius: 6px; background: #0284c7; color: white; font-weight: bold; cursor: pointer; }
+        .code-box { background: #10b981; color: #fff; font-size: 24px; font-weight: bold; padding: 15px; border-radius: 8px; margin-top: 15px; }
+        .hidden { display: none; }
+        .error { color: #f87171; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <div id="login-section">
+        <h2>Đăng Nhập</h2>
+        <input type="password" id="password" placeholder="Nhập mật khẩu...">
+        <p id="error-msg" class="error hidden">Mật khẩu không chính xác!</p>
+        <button onclick="submitPassword()">Xác nhận</button>
+    </div>
+
+    <div id="waiting-section" class="hidden">
+        <h2>Yêu cầu đã gửi</h2>
+        <p>Đang chờ Admin cấp mã xác nhận...</p>
+    </div>
+
+    <div id="success-section" class="hidden">
+        <h2>Thành Công!</h2>
+        <p>Mã xác nhận của bạn là:</p>
+        <div id="received-code" class="code-box">------</div>
+    </div>
+</div>
+
+<script>
+    // Điền URL Cloudflare Worker của bạn vào đây
+    const WORKER_URL = "https://qwet-auth-worker.yourname.workers.dev";
+    let checkInterval = null;
+
+    async function submitPassword() {
+        const inputPass = document.getElementById('password').value;
+        const errorMsg = document.getElementById('error-msg');
+
+        try {
+            const res = await fetch(`${WORKER_URL}/api/request`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: inputPass })
+            });
+
+            const data = await res.json();
+
+            if (data.success) {
+                errorMsg.classList.add('hidden');
+                document.getElementById('login-section').classList.add('hidden');
+                document.getElementById('waiting-section').classList.remove('hidden');
+
+                // Bắt đầu lắng nghe phản hồi từ Admin mỗi 2 giây
+                checkInterval = setInterval(checkStatus, 2000);
+            } else {
+                errorMsg.innerText = data.message || "Lỗi xác thực!";
+                errorMsg.classList.remove('hidden');
+            }
+        } catch (err) {
+            alert("Lỗi kết nối Server!");
+        }
+    }
+
+    async function checkStatus() {
+        try {
+            const res = await fetch(`${WORKER_URL}/api/status`);
+            const data = await res.json();
+
+            if (data.status === "approved") {
+                clearInterval(checkInterval);
+                document.getElementById('waiting-section').classList.add('hidden');
+                document.getElementById('success-section').classList.remove('hidden');
+                document.getElementById('received-code').innerText = data.code;
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }
+</script>
+</body>
+</html>
